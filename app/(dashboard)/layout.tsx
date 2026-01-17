@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { FileText, Users, Plus, Building2, ChevronDown, Loader2 } from 'lucide-react'
+import { FileText, Users, Plus, Building2, ChevronDown, Loader2, HelpCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { CompanyProvider, useCompany } from '@/lib/company-context'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ import { useState } from 'react'
 const navigation = [
   { name: '勞報單', href: '/reports', icon: FileText },
   { name: '聯絡人', href: '/contacts', icon: Users },
+  { name: '說明', href: '/help', icon: HelpCircle },
 ]
 
 function DashboardHeader() {
