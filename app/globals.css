@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #a51e36;
+  --primary-light: #d32a4c;
+  --primary-dark: #8b1c32;
+}
+
+body {
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 輸入框樣式 */
+input, select, textarea {
+  @apply outline-none;
+}
+
+input:focus, select:focus, textarea:focus {
+  @apply ring-2 ring-primary-700 ring-opacity-50;
+}
+
+/* 按鈕樣式 */
+.btn-primary {
+  @apply bg-primary-700 text-white px-4 py-2 rounded-lg font-medium
+         hover:bg-primary-800 active:bg-primary-900
+         transition-colors duration-200
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium
+         hover:bg-gray-200 active:bg-gray-300
+         transition-colors duration-200
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-outline {
+  @apply border-2 border-primary-700 text-primary-700 px-4 py-2 rounded-lg font-medium
+         hover:bg-primary-50 active:bg-primary-100
+         transition-colors duration-200
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* 卡片樣式 */
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100;
+}
+
+/* 表單樣式 */
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg
+         focus:ring-2 focus:ring-primary-700 focus:ring-opacity-50 focus:border-primary-700
+         transition-colors duration-200;
+}
+
+.form-select {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg
+         focus:ring-2 focus:ring-primary-700 focus:ring-opacity-50 focus:border-primary-700
+         transition-colors duration-200 bg-white;
+}
+
+/* 簽名板 */
+.signature-pad {
+  @apply border-2 border-dashed border-gray-300 rounded-lg bg-gray-50;
+}
+
+/* 狀態標籤 */
+.status-badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-draft {
+  @apply bg-gray-100 text-gray-700;
+}
+
+.status-pending {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-signed {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-cancelled {
+  @apply bg-red-100 text-red-800;
+}
+
+/* 列印樣式 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    @apply bg-white;
+  }
+  
+  .card {
+    @apply shadow-none border-none;
+  }
+}
