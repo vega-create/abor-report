@@ -77,6 +77,22 @@ interface Contact {
   bank_name: string
   bank_account: string
   is_union_member: boolean
+  id_card_front_url?: string
+  id_card_back_url?: string
+  bank_book_url?: string
+}
+
+// 檢查聯絡人是否有完整資料（可以只需簽名）
+const hasCompleteData = (contact: Contact) => {
+  return !!(
+    contact.id_number &&
+    contact.address &&
+    contact.bank_name &&
+    contact.bank_account &&
+    contact.id_card_front_url &&
+    contact.id_card_back_url &&
+    contact.bank_book_url
+  )
 }
 
 interface LineGroup {
@@ -164,7 +180,12 @@ export default function NewReportPage() {
     setPayeeName(contact.name)
     setShowContactList(false)
     setSearchContact('')
-    toast.success(`已選擇 ${contact.name}，對方只需簽名即可`)
+    
+    if (hasCompleteData(contact)) {
+      toast.success(`已選擇 ${contact.name}，資料完整，對方只需簽名`)
+    } else {
+      toast.info(`已選擇 ${contact.name}，對方需補填部分資料`)
+    }
   }
 
   // 清除選擇
@@ -352,16 +373,16 @@ export default function NewReportPage() {
                 
                 {selectedContact ? (
                   // 已選擇聯絡人
-                  <div className="border-2 border-green-500 bg-green-50 rounded-lg p-4">
+                  <div className={`border-2 rounded-lg p-4 ${hasCompleteData(selectedContact) ? 'border-green-500 bg-green-50' : 'border-amber-500 bg-amber-50'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                          <CheckCircle className="w-6 h-6 text-green-600" />
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasCompleteData(selectedContact) ? 'bg-green-100' : 'bg-amber-100'}`}>
+                          <CheckCircle className={`w-6 h-6 ${hasCompleteData(selectedContact) ? 'text-green-600' : 'text-amber-600'}`} />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{selectedContact.name}</p>
                           <p className="text-sm text-gray-500">
-                            {selectedContact.id_number} · {selectedContact.bank_name}
+                            {selectedContact.id_number || '尚無身分證'} · {selectedContact.bank_name || '尚無銀行資料'}
                           </p>
                           {selectedContact.is_union_member && (
                             <span className="inline-block mt-1 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
@@ -377,9 +398,15 @@ export default function NewReportPage() {
                         更換
                       </button>
                     </div>
-                    <p className="text-sm text-green-700 mt-3">
-                      ✓ 資料已帶入，對方打開連結只需簽名
-                    </p>
+                    {hasCompleteData(selectedContact) ? (
+                      <p className="text-sm text-green-700 mt-3">
+                        ✓ 資料完整，對方打開連結只需簽名
+                      </p>
+                    ) : (
+                      <p className="text-sm text-amber-700 mt-3">
+                        ⚠️ 資料不完整，對方需補填缺少的資料
+                      </p>
+                    )}
                   </div>
                 ) : (
                   // 選擇聯絡人或手動輸入
@@ -416,7 +443,7 @@ export default function NewReportPage() {
                             ) : filteredContacts.length > 0 ? (
                               <>
                                 <div className="px-3 py-2 text-xs text-gray-500 bg-gray-50 border-b">
-                                  選擇已有聯絡人（資料會自動帶入）
+                                  選擇已有聯絡人
                                 </div>
                                 {filteredContacts.map(contact => (
                                   <button
@@ -424,18 +451,22 @@ export default function NewReportPage() {
                                     onClick={() => handleSelectContact(contact)}
                                     className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0 flex items-center gap-3"
                                   >
-                                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                      <User className="w-4 h-4 text-gray-600" />
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCompleteData(contact) ? 'bg-green-100' : 'bg-gray-100'}`}>
+                                      <User className={`w-4 h-4 ${hasCompleteData(contact) ? 'text-green-600' : 'text-gray-600'}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="font-medium text-gray-900">{contact.name}</p>
                                       <p className="text-sm text-gray-500 truncate">
-                                        {contact.id_number} {contact.bank_name && `· ${contact.bank_name}`}
+                                        {contact.id_number || '尚無身分證'} {contact.bank_name && `· ${contact.bank_name}`}
                                       </p>
                                     </div>
-                                    {contact.is_union_member && (
-                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                                        工會
+                                    {hasCompleteData(contact) ? (
+                                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                        資料完整
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                        需補填
                                       </span>
                                     )}
                                   </button>
@@ -572,8 +603,10 @@ export default function NewReportPage() {
               <li className="flex gap-2">
                 <span className="bg-blue-200 text-blue-800 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
                 <span>
-                  {selectedContact 
+                  {selectedContact && hasCompleteData(selectedContact)
                     ? <strong className="text-green-700">對方只需簽名即可 ✓</strong>
+                    : selectedContact
+                    ? '對方補填缺少的資料並簽名'
                     : '對方填寫資料並簽名'
                   }
                 </span>
@@ -679,9 +712,15 @@ export default function NewReportPage() {
               請將連結發送給 <strong>{payeeName}</strong>
             </p>
             
-            {hasContact && (
+            {hasContact && selectedContact && hasCompleteData(selectedContact) && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">
-                ✓ 已帶入聯絡人資料，對方<strong>只需簽名</strong>即可完成
+                ✓ 資料完整，對方<strong>只需簽名</strong>即可完成
+              </div>
+            )}
+            
+            {hasContact && selectedContact && !hasCompleteData(selectedContact) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+                ⚠️ 已帶入部分資料，對方需<strong>補填缺少的資料</strong>後簽名
               </div>
             )}
             
