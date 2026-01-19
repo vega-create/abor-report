@@ -66,6 +66,17 @@ export async function GET(
   // 如果有關聯的聯絡人，返回資料
   const contact = report.labor_contacts
   const hasContact = !!contact
+  
+  // 檢查聯絡人資料是否完整（可以只需簽名）
+  const hasCompleteData = hasContact && !!(
+    contact.id_number &&
+    contact.address &&
+    contact.bank_name &&
+    contact.bank_account &&
+    contact.id_card_front_url &&
+    contact.id_card_back_url &&
+    contact.bank_book_url
+  )
 
   return NextResponse.json({
     id: report.id,
@@ -82,8 +93,9 @@ export async function GET(
     net_amount: report.net_amount,
     payee_name: report.payee_name,
     status: report.status,
-    // 新增：聯絡人資料（如果有）
-    has_contact: hasContact,
+    // 聯絡人資料
+    has_contact: hasContact,           // 有關聯聯絡人（可能只有部分資料）
+    has_complete_data: hasCompleteData, // 資料完整，只需簽名
     contact: hasContact ? {
       name: contact.name,
       id_number: contact.id_number,
