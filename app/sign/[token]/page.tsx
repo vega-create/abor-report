@@ -209,22 +209,66 @@ export default function SignPage() {
     }
   }
 
-  // 處理檔案上傳（暫時用 base64，正式應上傳到 Storage）
-  const handleFileUpload = (type: 'id_card_front' | 'id_card_back' | 'bank_book', file: File | null) => {
+  // 壓縮圖片
+  const compressImage = (file: File, maxWidth: number = 1200): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          
+          // 如果圖片太大，按比例縮小
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('無法建立 canvas'))
+            return
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // 轉成 JPEG 品質 0.8
+          const compressedData = canvas.toDataURL('image/jpeg', 0.8)
+          resolve(compressedData)
+        }
+        img.onerror = () => reject(new Error('圖片載入失敗'))
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => reject(new Error('檔案讀取失敗'))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  // 處理檔案上傳
+  const handleFileUpload = async (type: 'id_card_front' | 'id_card_back' | 'bank_book', file: File | null) => {
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('檔案大小不能超過 5MB')
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('檔案大小不能超過 10MB')
       return
     }
     if (!file.type.startsWith('image/')) {
       toast.error('請上傳圖片檔案')
       return
     }
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setPreviews(prev => ({ ...prev, [type]: e.target?.result as string }))
+    
+    try {
+      toast.loading('處理圖片中...', { id: 'upload' })
+      const compressedData = await compressImage(file)
+      setPreviews(prev => ({ ...prev, [type]: compressedData }))
+      toast.success('圖片已上傳', { id: 'upload' })
+    } catch (err) {
+      toast.error('圖片處理失敗，請重試', { id: 'upload' })
     }
-    reader.readAsDataURL(file)
   }
 
   // 簽名功能
