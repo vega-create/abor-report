@@ -325,7 +325,7 @@ export default function SignPage() {
           className={`relative border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors hover:border-red-500 hover:bg-red-50/50 ${preview ? 'border-green-500 bg-green-50' : 'border-gray-300'}`}
           onClick={() => inputRef.current?.click()}
         >
-          <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileUpload(type, e.target.files?.[0] || null)} />
+          <input ref={inputRef} type="file" accept="image/*"  className="hidden" onChange={(e) => handleFileUpload(type, e.target.files?.[0] || null)} />
           {preview ? (
             <div className="relative">
               <img src={preview} alt={label} className="max-h-32 mx-auto rounded-lg object-contain" />
