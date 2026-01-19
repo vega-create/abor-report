@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { FileText, Users, Plus, Building2, ChevronDown, Loader2, HelpCircle } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { FileText, Users, Plus, Building2, ChevronDown, Loader2, HelpCircle, LogOut } from 'lucide-react'
 import { clsx } from 'clsx'
 import { CompanyProvider, useCompany } from '@/lib/company-context'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navigation = [
   { name: '勞報單', href: '/reports', icon: FileText },
@@ -15,8 +15,14 @@ const navigation = [
 
 function DashboardHeader() {
   const pathname = usePathname()
+  const router = useRouter()
   const { companies, currentCompany, setCurrentCompany, loading } = useCompany()
   const [showCompanyMenu, setShowCompanyMenu] = useState(false)
+
+  const handleLogout = () => {
+    localStorage.removeItem('labor_logged_in')
+    router.push('/login')
+  }
 
   if (loading) {
     return (
@@ -111,13 +117,23 @@ function DashboardHeader() {
             </nav>
           </div>
           
-          <Link
-            href="/reports/new"
-            className="flex items-center gap-2 bg-white text-primary-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">新增勞報單</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/reports/new"
+              className="flex items-center gap-2 bg-white text-primary-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">新增勞報單</span>
+            </Link>
+            
+            <button
+              onClick={handleLogout}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              title="登出"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -172,17 +188,49 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   )
 }
 
+function AuthCheck({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const [checking, setChecking] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  useEffect(() => {
+    const loggedIn = localStorage.getItem('labor_logged_in') === 'true'
+    if (!loggedIn) {
+      router.replace('/login')
+    } else {
+      setIsLoggedIn(true)
+    }
+    setChecking(false)
+  }, [router])
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <Loader2 className="w-8 h-8 animate-spin text-red-700" />
+      </div>
+    )
+  }
+
+  if (!isLoggedIn) {
+    return null
+  }
+
+  return <>{children}</>
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <CompanyProvider>
-      <div className="min-h-screen bg-gray-50">
-        <DashboardHeader />
-        <DashboardContent>{children}</DashboardContent>
-      </div>
-    </CompanyProvider>
+    <AuthCheck>
+      <CompanyProvider>
+        <div className="min-h-screen bg-gray-50">
+          <DashboardHeader />
+          <DashboardContent>{children}</DashboardContent>
+        </div>
+      </CompanyProvider>
+    </AuthCheck>
   )
 }

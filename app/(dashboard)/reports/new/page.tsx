@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Calculator, Copy, Check, Link2, Loader2, Building2, User, Search, UserPlus, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Calculator, Copy, Check, Link2, Loader2, Building2, User, Search, UserPlus, CheckCircle, MessageCircle, Send } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import { useCompany } from '@/lib/company-context'
 
@@ -79,6 +79,12 @@ interface Contact {
   is_union_member: boolean
 }
 
+interface LineGroup {
+  id: string
+  group_id: string
+  group_name: string
+}
+
 export default function NewReportPage() {
   const router = useRouter()
   const { currentCompany, loading: companyLoading } = useCompany()
@@ -89,6 +95,12 @@ export default function NewReportPage() {
   const [searchContact, setSearchContact] = useState('')
   const [showContactList, setShowContactList] = useState(false)
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  
+  // LINE 群組
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([])
+  const [selectedLineGroup, setSelectedLineGroup] = useState<string>('')
+  const [sendingLine, setSendingLine] = useState(false)
+  const [lineSent, setLineSent] = useState(false)
   
   // 表單狀態
   const [payeeName, setPayeeName] = useState('')
@@ -104,6 +116,8 @@ export default function NewReportPage() {
   const [showSignLink, setShowSignLink] = useState(false)
   const [signLink, setSignLink] = useState('')
   const [reportNumber, setReportNumber] = useState('')
+  const [reportGrossAmount, setReportGrossAmount] = useState(0)
+  const [reportNetAmount, setReportNetAmount] = useState(0)
   const [copied, setCopied] = useState(false)
   const [hasContact, setHasContact] = useState(false)
   
@@ -121,6 +135,20 @@ export default function NewReportPage() {
       }
     }
     fetchContacts()
+  }, [])
+
+  // 載入 LINE 群組列表
+  useEffect(() => {
+    const fetchLineGroups = async () => {
+      try {
+        const res = await fetch('/api/line/groups')
+        const data = await res.json()
+        setLineGroups(data.groups || [])
+      } catch (err) {
+        console.error('載入 LINE 群組失敗', err)
+      }
+    }
+    fetchLineGroups()
   }, [])
 
   // 篩選聯絡人
@@ -199,7 +227,10 @@ export default function NewReportPage() {
       const link = `${window.location.origin}/sign/${data.report.sign_token}`
       setSignLink(link)
       setReportNumber(data.report.report_number)
+      setReportGrossAmount(data.report.gross_amount)
+      setReportNetAmount(data.report.net_amount)
       setHasContact(data.report.has_contact)
+      setLineSent(false)
       setShowSignLink(true)
       toast.success('已產生簽名連結！')
     } catch (error) {
@@ -218,6 +249,40 @@ export default function NewReportPage() {
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
       toast.error('複製失敗')
+    }
+  }
+
+  // 發送到 LINE
+  const handleSendToLine = async () => {
+    if (!selectedLineGroup) {
+      toast.error('請選擇 LINE 群組')
+      return
+    }
+    
+    setSendingLine(true)
+    try {
+      const res = await fetch('/api/line/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: selectedLineGroup,
+          payeeName,
+          grossAmount: reportGrossAmount,
+          netAmount: reportNetAmount,
+          signLink,
+        }),
+      })
+      
+      if (!res.ok) {
+        throw new Error('發送失敗')
+      }
+      
+      setLineSent(true)
+      toast.success('已發送到 LINE 群組！')
+    } catch (error) {
+      toast.error('LINE 發送失敗，請稍後再試')
+    } finally {
+      setSendingLine(false)
     }
   }
 
@@ -502,7 +567,7 @@ export default function NewReportPage() {
               </li>
               <li className="flex gap-2">
                 <span className="bg-blue-200 text-blue-800 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                <span>產生連結 → 發送給領款人</span>
+                <span>產生連結 → 選擇 LINE 群組發送或複製連結</span>
               </li>
               <li className="flex gap-2">
                 <span className="bg-blue-200 text-blue-800 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
@@ -601,7 +666,7 @@ export default function NewReportPage() {
       {/* 簽名連結彈窗 */}
       {showSignLink && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Check className="w-8 h-8 text-green-600" />
@@ -611,7 +676,7 @@ export default function NewReportPage() {
             </div>
             
             <p className="text-gray-600 mb-4 text-center">
-              請將以下連結發送給 <strong>{payeeName}</strong>
+              請將連結發送給 <strong>{payeeName}</strong>
             </p>
             
             {hasContact && (
@@ -620,31 +685,90 @@ export default function NewReportPage() {
               </div>
             )}
             
-            <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg mb-4">
-              <input
-                type="text"
-                value={signLink}
-                readOnly
-                className="flex-1 bg-transparent text-sm font-mono outline-none"
-              />
-              <button
-                onClick={handleCopyLink}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                {copied ? (
-                  <Check className="w-5 h-5 text-green-600" />
-                ) : (
-                  <Copy className="w-5 h-5 text-gray-600" />
-                )}
-              </button>
+            {/* LINE 發送區塊 */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <MessageCircle className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">發送到 LINE 群組</span>
+              </div>
+              
+              {lineGroups.length > 0 ? (
+                <div className="space-y-3">
+                  <select
+                    value={selectedLineGroup}
+                    onChange={(e) => setSelectedLineGroup(e.target.value)}
+                    className="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={lineSent}
+                  >
+                    <option value="">選擇群組...</option>
+                    {lineGroups.map(group => (
+                      <option key={group.id} value={group.group_id}>
+                        {group.group_name}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {lineSent ? (
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="w-5 h-5" />
+                      <span>已發送到 LINE 群組！</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleSendToLine}
+                      disabled={!selectedLineGroup || sendingLine}
+                      className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {sendingLine ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          發送中...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          發送到 LINE
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-green-700">
+                  尚未連接 LINE 群組。請將 Bot 加入群組後即可使用此功能。
+                </p>
+              )}
+            </div>
+            
+            {/* 複製連結區塊 */}
+            <div className="border-t pt-4">
+              <p className="text-sm text-gray-500 mb-2">或手動複製連結：</p>
+              <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg mb-4">
+                <input
+                  type="text"
+                  value={signLink}
+                  readOnly
+                  className="flex-1 bg-transparent text-sm font-mono outline-none"
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  {copied ? (
+                    <Check className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <Copy className="w-5 h-5 text-gray-600" />
+                  )}
+                </button>
+              </div>
             </div>
             
             <div className="flex gap-3">
-              <button onClick={handleCopyLink} className="flex-1 bg-red-700 text-white py-2 rounded-lg font-medium hover:bg-red-800 flex items-center justify-center gap-2">
+              <button onClick={handleCopyLink} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-300 flex items-center justify-center gap-2">
                 <Copy className="w-4 h-4" />
                 複製連結
               </button>
-              <button onClick={() => { setShowSignLink(false); router.push('/reports') }} className="flex-1 border border-gray-300 py-2 rounded-lg font-medium hover:bg-gray-50">
+              <button onClick={() => { setShowSignLink(false); router.push('/reports') }} className="flex-1 bg-red-700 text-white py-2 rounded-lg font-medium hover:bg-red-800">
                 完成
               </button>
             </div>
