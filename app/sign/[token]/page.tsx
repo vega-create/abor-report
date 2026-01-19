@@ -48,6 +48,7 @@ interface ReportData {
   payee_name: string
   status: string
   has_contact: boolean
+  has_complete_data: boolean  // 資料完整，可以只需簽名
   contact: {
     name: string
     id_number: string
@@ -115,10 +116,9 @@ export default function SignPage() {
         setReport(data)
         setFormData(prev => ({ ...prev, name: data.payee_name || '' }))
         
-        // 如果有聯絡人資料，自動帶入所有欄位
+        // 如果有聯絡人資料，自動帶入欄位
         if (data.has_contact && data.contact) {
           const c = data.contact
-          setHasExistingData(true)
           setFormData({
             name: c.name || data.payee_name || '',
             id_number: c.id_number || '',
@@ -136,7 +136,14 @@ export default function SignPage() {
             id_card_back: c.id_card_back_url || '',
             bank_book: c.bank_book_url || '',
           })
-          toast.success('您的資料已自動帶入，請確認後簽名即可')
+          
+          // 只有資料完整才設定 hasExistingData = true
+          if (data.has_complete_data) {
+            setHasExistingData(true)
+            toast.success('您的資料已自動帶入，請確認後簽名即可')
+          } else {
+            toast.info('已帶入部分資料，請補填缺少的欄位')
+          }
         }
       } catch (err) {
         setError('無法載入勞報單資料')
@@ -325,7 +332,7 @@ export default function SignPage() {
           className={`relative border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors hover:border-red-500 hover:bg-red-50/50 ${preview ? 'border-green-500 bg-green-50' : 'border-gray-300'}`}
           onClick={() => inputRef.current?.click()}
         >
-          <input ref={inputRef} type="file" accept="image/*"  className="hidden" onChange={(e) => handleFileUpload(type, e.target.files?.[0] || null)} />
+          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(type, e.target.files?.[0] || null)} />
           {preview ? (
             <div className="relative">
               <img src={preview} alt={label} className="max-h-32 mx-auto rounded-lg object-contain" />
