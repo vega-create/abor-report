@@ -10,24 +10,25 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { token: string } }
 ) {
-  const token = params.token
-  const body = await request.json()
+  try {
+    const token = params.token
+    const body = await request.json()
 
-  const {
-    name,
-    id_number,
-    phone,
-    email,
-    address,
-    bank_name,
-    bank_branch,
-    bank_account,
-    is_union_member,
-    signature_data,
-    id_card_front_url,
-    id_card_back_url,
-    bank_book_url,
-  } = body
+    const {
+      name,
+      id_number,
+      phone,
+      email,
+      address,
+      bank_name,
+      bank_branch,
+      bank_account,
+      is_union_member,
+      signature_data,
+      id_card_front_url,
+      id_card_back_url,
+      bank_book_url,
+    } = body
 
   // 取得客戶端 IP
   const forwarded = request.headers.get('x-forwarded-for')
@@ -135,4 +136,11 @@ export async function POST(
     success: true,
     message: '簽名完成！',
   })
+  } catch (error) {
+    console.error('Sign API error:', error)
+    return NextResponse.json(
+      { error: '系統錯誤，請重試' },
+      { status: 500 }
+    )
+  }
 }
