@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { 
   FileText, Plus, Send, Download, Eye, Clock, CheckCircle, XCircle, 
-  Search, FileSpreadsheet, CheckSquare, Square, Trash2, Loader2, AlertTriangle
+  Search, FileSpreadsheet, CheckSquare, Square, Trash2, Loader2, AlertTriangle,
+  Calendar, X
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import { useCompany } from '@/lib/company-context'
@@ -67,6 +68,8 @@ interface Report {
   created_at: string
 }
 
+type DateRangeOption = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'
+
 export default function ReportsPage() {
   const { currentCompany, companies } = useCompany()
   const [reports, setReports] = useState<Report[]>([])
@@ -77,6 +80,18 @@ export default function ReportsPage() {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  
+  // 匯出 Modal 狀態
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportDateRange, setExportDateRange] = useState<DateRangeOption>('month')
+  const [exportCustomStart, setExportCustomStart] = useState('')
+  const [exportCustomEnd, setExportCustomEnd] = useState('')
+  const [exportStatusFilter, setExportStatusFilter] = useState({
+    signed: true,
+    pending: true,
+    draft: false
+  })
+  const [exporting, setExporting] = useState(false)
 
   // 載入勞報單
   const fetchReports = async () => {
@@ -243,7 +258,7 @@ export default function ReportsPage() {
     toast.success('已下載 CSV')
   }
 
-  // 批次匯出 CSV
+  // 批次匯出 CSV（選取的）
   const handleBatchExport = () => {
     const selectedReports = reports.filter(r => selectedIds.includes(r.id))
     const companyName = currentCompany?.name.replace('股份有限公司', '') || '全部'
@@ -287,6 +302,147 @@ export default function ReportsPage() {
     toast.success(`已匯出 ${selectedReports.length} 筆資料`)
   }
 
+  // ========== 匯出 Modal 相關功能 ==========
+  
+  // 計算日期範圍
+  const getExportDateRange = (): { start: Date; end: Date } => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const end = new Date()
+    end.setHours(23, 59, 59, 999)
+
+    switch (exportDateRange) {
+      case 'today':
+        return { start: today, end }
+      
+      case 'week': {
+        const start = new Date(today)
+        start.setDate(today.getDate() - today.getDay())
+        return { start, end }
+      }
+      
+      case 'month': {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1)
+        return { start, end }
+      }
+      
+      case 'quarter': {
+        const quarterStart = Math.floor(today.getMonth() / 3) * 3
+        const start = new Date(today.getFullYear(), quarterStart, 1)
+        return { start, end }
+      }
+      
+      case 'year': {
+        const start = new Date(today.getFullYear(), 0, 1)
+        return { start, end }
+      }
+      
+      case 'custom': {
+        return {
+          start: exportCustomStart ? new Date(exportCustomStart) : today,
+          end: exportCustomEnd ? new Date(exportCustomEnd + 'T23:59:59') : end
+        }
+      }
+      
+      default:
+        return { start: today, end }
+    }
+  }
+
+  // 篩選要匯出的報表
+  const getExportFilteredReports = () => {
+    const { start, end } = getExportDateRange()
+    
+    return companyReports.filter(report => {
+      // 日期篩選
+      const reportDate = new Date(report.payment_date || report.created_at)
+      if (reportDate < start || reportDate > end) return false
+      
+      // 狀態篩選
+      if (report.status === 'signed' && !exportStatusFilter.signed) return false
+      if (report.status === 'pending' && !exportStatusFilter.pending) return false
+      if (report.status === 'draft' && !exportStatusFilter.draft) return false
+      
+      return true
+    })
+  }
+
+  // 時間範圍匯出
+  const handleDateRangeExport = () => {
+    const exportReports = getExportFilteredReports()
+    
+    if (exportReports.length === 0) {
+      toast.error('沒有符合條件的資料')
+      return
+    }
+
+    setExporting(true)
+
+    try {
+      const csvContent = [
+        ['公司名稱', '公司統編', '勞報單編號', '領款人姓名', '身分證字號', '戶籍地址', '所得類別', '所得代碼', '總金額', '代扣所得稅', '二代健保', '實付金額', '銀行名稱', '銀行帳號', '支付日期', '狀態'],
+        ...exportReports.map(report => [
+          getCompanyName(report.company_id),
+          getCompanyTaxId(report.company_id),
+          report.report_number,
+          report.payee_name,
+          report.payee_id_number || '',
+          report.payee_address || '',
+          INCOME_TYPE_NAMES[report.income_type] || report.income_type,
+          INCOME_TYPE_CODES[report.income_type] || report.income_type,
+          report.gross_amount,
+          report.income_tax || 0,
+          report.health_insurance || 0,
+          report.net_amount,
+          report.payee_bank_name || '',
+          report.payee_bank_account || '',
+          report.payment_date,
+          report.status === 'signed' ? '已簽名' : report.status === 'pending' ? '待簽名' : '草稿'
+        ])
+      ]
+
+      const BOM = '\uFEFF'
+      const csvString = BOM + csvContent.map(row => 
+        row.map(cell => `"${cell}"`).join(',')
+      ).join('\n')
+
+      // 產生檔名
+      const { start, end } = getExportDateRange()
+      const formatDateStr = (d: Date) => d.toISOString().split('T')[0].replace(/-/g, '')
+      const companyName = currentCompany?.name.replace('股份有限公司', '') || ''
+      const fileName = `勞報單_${companyName}_${formatDateStr(start)}_${formatDateStr(end)}.csv`
+
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast.success(`已匯出 ${exportReports.length} 筆資料`)
+      setShowExportModal(false)
+    } catch (error) {
+      toast.error('匯出失敗')
+      console.error(error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const exportFilteredCount = getExportFilteredReports().length
+
+  const rangeLabels: Record<DateRangeOption, string> = {
+    today: '今日',
+    week: '本週',
+    month: '本月',
+    quarter: '本季',
+    year: '今年度',
+    custom: '自訂範圍'
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -307,10 +463,19 @@ export default function ReportsPage() {
             {currentCompany?.name.replace('股份有限公司', '')} 的勞務報酬單
           </p>
         </div>
-        <Link href="/reports/new" className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          新增勞報單
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="px-4 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            匯出報表
+          </button>
+          <Link href="/reports/new" className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            新增勞報單
+          </Link>
+        </div>
       </div>
 
       {/* 統計卡片 */}
@@ -554,6 +719,133 @@ export default function ReportsPage() {
               >
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 確認刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 匯出報表 Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Download className="w-5 h-5 text-green-600" />
+                匯出勞報單
+              </h2>
+              <button onClick={() => setShowExportModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-4">
+              {/* 時間範圍 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-1" />
+                  時間範圍
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['today', 'week', 'month', 'quarter', 'year', 'custom'] as DateRangeOption[]).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setExportDateRange(option)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        exportDateRange === option
+                          ? 'bg-red-700 text-white border-red-700'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-red-400'
+                      }`}
+                    >
+                      {rangeLabels[option]}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 自訂日期輸入 */}
+                {exportDateRange === 'custom' && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={exportCustomStart}
+                      onChange={(e) => setExportCustomStart(e.target.value)}
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                    />
+                    <span className="text-gray-500">~</span>
+                    <input
+                      type="date"
+                      value={exportCustomEnd}
+                      onChange={(e) => setExportCustomEnd(e.target.value)}
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 狀態篩選 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  狀態篩選
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportStatusFilter.signed}
+                      onChange={(e) => setExportStatusFilter(s => ({ ...s, signed: e.target.checked }))}
+                      className="w-4 h-4 text-red-700 rounded"
+                    />
+                    <span className="text-sm">已簽名</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportStatusFilter.pending}
+                      onChange={(e) => setExportStatusFilter(s => ({ ...s, pending: e.target.checked }))}
+                      className="w-4 h-4 text-red-700 rounded"
+                    />
+                    <span className="text-sm">待簽名</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportStatusFilter.draft}
+                      onChange={(e) => setExportStatusFilter(s => ({ ...s, draft: e.target.checked }))}
+                      className="w-4 h-4 text-red-700 rounded"
+                    />
+                    <span className="text-sm">草稿</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 預覽數量 */}
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm text-gray-600">
+                  符合條件的資料：
+                  <span className="font-semibold text-red-700 ml-1">
+                    {exportFilteredCount} 筆
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDateRangeExport}
+                disabled={exporting || exportFilteredCount === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                {exporting ? '匯出中...' : `匯出 CSV`}
               </button>
             </div>
           </div>
